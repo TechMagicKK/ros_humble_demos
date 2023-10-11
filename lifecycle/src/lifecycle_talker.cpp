@@ -23,6 +23,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/publisher.hpp"
+#include <rclcpp/callback_group.hpp>
 
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "rclcpp_lifecycle/lifecycle_publisher.hpp"
@@ -62,7 +63,9 @@ public:
   explicit LifecycleTalker(const std::string & node_name, bool intra_process_comms = false)
   : rclcpp_lifecycle::LifecycleNode(node_name,
       rclcpp::NodeOptions().use_intra_process_comms(intra_process_comms))
-  {}
+  {
+    RCLCPP_INFO(get_logger(), "Debugging LifecycleTalker");
+  }
 
   /// Callback for walltimer in order to publish the message.
   /**
@@ -118,8 +121,9 @@ public:
     // As of the beta version, there is only a lifecycle publisher
     // available.
     pub_ = this->create_publisher<std_msgs::msg::String>("lifecycle_chatter", 10);
+    timer_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     timer_ = this->create_wall_timer(
-      1s, std::bind(&LifecycleTalker::publish, this));
+      1s, std::bind(&LifecycleTalker::publish, this), timer_cb_group_);
 
     RCLCPP_INFO(get_logger(), "on_configure() is called.");
 
@@ -217,6 +221,7 @@ public:
     // timer and publisher. These entities are no longer available
     // and our node is "clean".
     timer_.reset();
+    timer_cb_group_.reset();
     pub_.reset();
 
     RCUTILS_LOG_INFO_NAMED(get_name(), "on cleanup is called.");
@@ -248,6 +253,7 @@ public:
     // timer and publisher. These entities are no longer available
     // and our node is "clean".
     timer_.reset();
+    timer_cb_group_.reset();
     pub_.reset();
 
     RCUTILS_LOG_INFO_NAMED(
@@ -277,6 +283,7 @@ private:
   // lifecycle timer will be created which obeys the same lifecycle management as the
   // lifecycle publisher.
   std::shared_ptr<rclcpp::TimerBase> timer_;
+  std::shared_ptr<rclcpp::CallbackGroup> timer_cb_group_;
 };
 
 /**
@@ -293,7 +300,7 @@ int main(int argc, char * argv[])
 
   rclcpp::init(argc, argv);
 
-  rclcpp::executors::SingleThreadedExecutor exe;
+  rclcpp::executors::MultiThreadedExecutor exe;
 
   std::shared_ptr<LifecycleTalker> lc_node =
     std::make_shared<LifecycleTalker>("lc_talker");
